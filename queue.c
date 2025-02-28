@@ -181,9 +181,59 @@ void q_reverseK(struct list_head *head, int k)
         }
     }
 }
+struct list_head *merge(struct list_head *left, struct list_head *right)
+{
+    LIST_HEAD(dummy_head);
+    struct list_head *list = &dummy_head;
+    while (left && right) {
+        const char *s1 = list_entry(left, element_t, list)->value,
+                   *s2 = list_entry(right, element_t, list)->value;
+        if (strcmp(s1, s2) <= 0) {
+            list->next = left;
+            left = left->next;
+        } else {
+            list->next = right;
+            right = right->next;
+        }
+        list = list->next;
+    }
+    list->next = left ? left : right;
+    return dummy_head.next;
+}
 
+struct list_head *mergeSort(struct list_head *head)
+{
+    if (!head || !head->next)
+        return head;
+    struct list_head *slow = head, *fast = head->next, *right = NULL;
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+    right = slow->next;
+    slow->next = NULL;
+    head = mergeSort(head);
+    right = mergeSort(right);
+    return merge(head, right);
+}
 /* Sort elements of queue in ascending/descending order */
-void q_sort(struct list_head *head, bool descend) {}
+void q_sort(struct list_head *head, bool descend)
+{
+    if (!head || list_empty(head) || list_is_singular(head))
+        return;
+    struct list_head *data_head = head->next, *node = NULL, *safe = NULL;
+    head->prev->next = NULL;
+    head->next = mergeSort(data_head);
+
+    for (node = head, safe = head->next; safe->next;
+         node = safe, safe = node->next) {
+        safe->prev = node;
+    }
+    safe->next = head;
+    head->prev = safe;
+    if (descend)
+        q_reverse(head);
+}
 
 int q_purge(struct list_head *head, bool descend)
 {
