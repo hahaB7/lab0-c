@@ -19,7 +19,8 @@
 #include <time.h>
 #endif
 
-#include "dudect/fixture.h"
+
+#include "dudect/measure.h"
 #include "list.h"
 #include "random.h"
 
