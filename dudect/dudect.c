@@ -64,6 +64,7 @@
  * follows would be dudect.c */
 
 #include "dudect.h"
+#include "queue.h"
 #include "random.h"
 
 #define DUDECT_TRACE (0)
@@ -187,7 +188,7 @@ static void measure(dudect_ctx_t *ctx)
     for (size_t i = 0; i < ctx->config->number_measurements; i++) {
         ctx->ticks[i] = cpucycles();
         ctx->config->compute(ctx->config->priv, ctx->config->chunk_size,
-                             ctx->input_data + i * ctx->config->chunk_size);
+                             ctx->input_data + i);
     }
 
     for (size_t i = 0; i < ctx->config->number_measurements - 1; i++) {
@@ -344,7 +345,6 @@ dudect_state_t dudect_main(dudect_ctx_t *ctx)
         update_statistics(ctx);
         ret = report(ctx);
     }
-
     return ret;
 }
 
@@ -360,14 +360,15 @@ int dudect_init(dudect_ctx_t *ctx, dudect_config_t *conf)
     ctx->exec_times = calloc(ctx->config->number_measurements, sizeof(int64_t));
     ctx->classes = calloc(ctx->config->number_measurements, sizeof(uint8_t));
     ctx->input_data =
-        calloc(ctx->config->number_measurements * ctx->config->chunk_size,
-               sizeof(uint8_t));
+        malloc(ctx->config->number_measurements * sizeof(struct list_head));
 
     for (int i = 0; i < DUDECT_TESTS; i++) {
         ctx->ttest_ctxs[i] = (ttest_ctx_t *) calloc(1, sizeof(ttest_ctx_t));
         assert(ctx->ttest_ctxs[i]);
         t_init(ctx->ttest_ctxs[i]);
     }
+    for (size_t i = 0; i < ctx->config->number_measurements; i++)
+        INIT_LIST_HEAD(&ctx->input_data[i]);
 
     ctx->percentiles = calloc(DUDECT_NUMBER_PERCENTILES, sizeof(int64_t));
 
@@ -386,6 +387,12 @@ int dudect_free(dudect_ctx_t *ctx)
         free(ctx->ttest_ctxs[i]);
     }
     free(ctx->percentiles);
+    for (size_t i = 0; i < ctx->config->number_measurements; i++) {
+        element_t *node = NULL, *safe = NULL;
+        list_for_each_entry_safe (node, safe, &ctx->input_data[i], list) {
+            q_release_element(node);
+        }
+    }
     free(ctx->input_data);
     free(ctx->classes);
     free(ctx->exec_times);

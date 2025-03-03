@@ -12,38 +12,41 @@
 /* Maintain a queue independent from the qtest since
  * we do not want the test to affect the original functionality
  */
-static struct list_head *l = NULL;
+static uint8_t s[CHUNK_SIZE];
 
-static uint8_t compute_insert_head(void *priv, size_t size, uint8_t *data)
+static uint8_t compute_insert_head(void *priv, size_t size, struct list_head *l)
 {
-    q_insert_head(l, (char *) data);
+    q_insert_head(l, (char *) s);
     return 0;
 }
 
-static uint8_t compute_insert_tail(void *priv, size_t size, uint8_t *data)
+static uint8_t compute_insert_tail(void *priv, size_t size, struct list_head *l)
 {
-    q_insert_tail(l, (char *) data);
+    q_insert_tail(l, (char *) s);
     return 0;
 }
 
-static uint8_t compute_remove_head(void *priv, size_t size, uint8_t *data)
+static uint8_t compute_remove_head(void *priv, size_t size, struct list_head *l)
 {
-    element_t *elem = q_remove_head(l, NULL, 0);
+    element_t *elem = q_remove_head(l, (char *) s, size);
     q_release_element(elem);
     return 0;
 }
 
-static uint8_t compute_remove_tail(void *priv, size_t size, uint8_t *data)
+static uint8_t compute_remove_tail(void *priv, size_t size, struct list_head *l)
 {
-    element_t *elem = q_remove_tail(l, NULL, 0);
+    element_t *elem = q_remove_tail(l, (char *) s, size);
     q_release_element(elem);
     return 0;
 }
 
-static void fixed_string(uint8_t *buf, size_t len)
+static void release_queue(struct list_head *l)
 {
-    memset(buf, 'a', len - 1);
-    buf[len - 1] = '\0';
+    element_t *node = NULL, *safe = NULL;
+    list_for_each_entry_safe (node, safe, l, list) {
+        q_release_element(node);
+    }
+    INIT_LIST_HEAD(l);
 }
 
 static void random_string(uint8_t *buf, size_t len)
@@ -56,71 +59,41 @@ static void random_string(uint8_t *buf, size_t len)
     buf[len - 1] = '\0';
 }
 
-static void prepare_inserts(void *priv,
-                            dudect_config_t *cfg,
-                            uint8_t *input_data,
-                            uint8_t *classes)
+static void fixed_queue(struct list_head *l)
+{
+    if (!list_empty(l))
+        release_queue(l);
+    q_insert_head(l, (char *) s);
+}
+static void random_queue(struct list_head *l)
+{
+    if (!list_empty(l))
+        release_queue(l);
+    uint8_t buf[1];
+    randombytes(buf, 1);
+    uint8_t len = buf[0];
+    for (uint16_t i = 0; i < len + 1; i++) {
+        q_insert_head(l, (char *) s);
+    }
+}
+
+static void prepare_all(void *priv,
+                        dudect_config_t *cfg,
+                        struct list_head *input_data,
+                        uint8_t *classes)
 {
     for (size_t i = 0; i < N_MEASURES; i++) {
-        uint8_t *ptr = input_data + i * CHUNK_SIZE;
+        struct list_head *ptr = &input_data[i];
         classes[i] = randombit();
         if (classes[i] == 0)
-            fixed_string(ptr, CHUNK_SIZE);
+            fixed_queue(ptr);
         else
-            random_string(ptr, CHUNK_SIZE);
-    }
-}
-
-static void prepare_insert_head(void *priv,
-                                dudect_config_t *cfg,
-                                uint8_t *input_data,
-                                uint8_t *classes)
-{
-    prepare_inserts(priv, cfg, input_data, classes);
-}
-
-static void prepare_insert_tail(void *priv,
-                                dudect_config_t *cfg,
-                                uint8_t *input_data,
-                                uint8_t *classes)
-{
-    prepare_inserts(priv, cfg, input_data, classes);
-}
-
-static void prepare_remove_head(void *priv,
-                                dudect_config_t *cfg,
-                                uint8_t *input_data,
-                                uint8_t *classes)
-{
-    uint8_t tmp[CHUNK_SIZE];
-    for (int i = 0; i < N_MEASURES; i++) {
-        classes[i] = randombit();
-        if (classes[i] == 0)
-            fixed_string(tmp, CHUNK_SIZE);
-        else
-            random_string(tmp, CHUNK_SIZE);
-        q_insert_tail(l, (char *) tmp);
-    }
-}
-
-static void prepare_remove_tail(void *priv,
-                                dudect_config_t *cfg,
-                                uint8_t *input_data,
-                                uint8_t *classes)
-{
-    uint8_t tmp[CHUNK_SIZE];
-    for (int i = 0; i < N_MEASURES; i++) {
-        classes[i] = randombit();
-        if (classes[i] == 0)
-            fixed_string(tmp, CHUNK_SIZE);
-        else
-            random_string(tmp, CHUNK_SIZE);
-        q_insert_head(l, (char *) tmp);
+            random_queue(ptr);
     }
 }
 
 #define GEN_DUDECT_CONFIG(op)                                       \
-    static dudect_config_t config_##op = {.prepare = prepare_##op,  \
+    static dudect_config_t config_##op = {.prepare = prepare_all,   \
                                           .compute = compute_##op,  \
                                           .priv = NULL,             \
                                           .chunk_size = CHUNK_SIZE, \
@@ -136,17 +109,13 @@ GEN_DUDECT_CONFIG(remove_tail);
     {                                                               \
         for (int i = 0; i < TEST_TRIES; i++) {                      \
             printf("Testing %s...(%d/%d)\n\n", #op, i, TEST_TRIES); \
-            if (l)                                                  \
-                q_free(l);                                          \
-            l = q_new();                                            \
+            random_string(s, CHUNK_SIZE);                           \
             dudect_ctx_t ctx;                                       \
             dudect_init(&ctx, &config_##op);                        \
             dudect_state_t state = DUDECT_NOT_ENOUGHT_MEASUREMENTS; \
             while (state == DUDECT_NOT_ENOUGHT_MEASUREMENTS)        \
                 state = dudect_main(&ctx);                          \
             dudect_free(&ctx);                                      \
-            q_free(l);                                              \
-            l = NULL;                                               \
             printf("\033[A\033[2K\033[A\033[2K");                   \
             if (state == DUDECT_NO_LEAKAGE_EVIDENCE_YET)            \
                 return true;                                        \

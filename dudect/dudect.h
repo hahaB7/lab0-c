@@ -65,6 +65,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "list.h"
 
 #ifdef DUDECT_VISIBLITY_STATIC
 #define DUDECT_VISIBILITY static
@@ -94,12 +95,12 @@ typedef struct __dudect_config dudect_config_t;
 
 typedef void (*dudect_prepare_func_t)(void *priv,
                                       dudect_config_t *conf,
-                                      uint8_t *input_data,
+                                      struct list_head *input_data,
                                       uint8_t *classes);
 
 typedef uint8_t (*dudect_compute_func_t)(void *priv,
                                          size_t size,
-                                         uint8_t *data);
+                                         struct list_head *l);
 
 struct __dudect_config {
     size_t chunk_size;
@@ -118,7 +119,7 @@ typedef struct {
 typedef struct {
     int64_t *ticks;
     int64_t *exec_times;
-    uint8_t *input_data;
+    struct list_head *input_data;
     uint8_t *classes;
     dudect_config_t *config;
     ttest_ctx_t *ttest_ctxs[DUDECT_TESTS];
