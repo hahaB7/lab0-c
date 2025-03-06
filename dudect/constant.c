@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "constant.h"
 #include "cpucycles.h"
@@ -84,6 +85,7 @@ bool measure(int64_t *before_ticks,
                 get_random_string(),
                 *(uint16_t *) (input_data + i * CHUNK_SIZE) % 10000);
             int before_size = q_size(l);
+            usleep(1000);
             before_ticks[i] = cpucycles();
             dut_insert_head(s, 1);
             after_ticks[i] = cpucycles();
@@ -101,6 +103,7 @@ bool measure(int64_t *before_ticks,
                 get_random_string(),
                 *(uint16_t *) (input_data + i * CHUNK_SIZE) % 10000);
             int before_size = q_size(l);
+            usleep(1000);
             before_ticks[i] = cpucycles();
             dut_insert_tail(s, 1);
             after_ticks[i] = cpucycles();
@@ -117,6 +120,7 @@ bool measure(int64_t *before_ticks,
                 get_random_string(),
                 *(uint16_t *) (input_data + i * CHUNK_SIZE) % 10000 + 1);
             int before_size = q_size(l);
+            usleep(1000);
             before_ticks[i] = cpucycles();
             element_t *e = q_remove_head(l, NULL, 0);
             after_ticks[i] = cpucycles();
@@ -135,6 +139,7 @@ bool measure(int64_t *before_ticks,
                 get_random_string(),
                 *(uint16_t *) (input_data + i * CHUNK_SIZE) % 10000 + 1);
             int before_size = q_size(l);
+            usleep(1000);
             before_ticks[i] = cpucycles();
             element_t *e = q_remove_tail(l, NULL, 0);
             after_ticks[i] = cpucycles();
@@ -152,6 +157,7 @@ bool measure(int64_t *before_ticks,
             dut_insert_head(
                 get_random_string(),
                 *(uint16_t *) (input_data + i * CHUNK_SIZE) % 10000);
+            usleep(1000);
             before_ticks[i] = cpucycles();
             dut_size(1);
             after_ticks[i] = cpucycles();
